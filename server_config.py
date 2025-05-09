@@ -3,11 +3,22 @@ import os, time, base64, json, requests
 #  Environment
 SERVER_URL      = os.environ.get("SERVER_URL", "http://127.0.0.1:5000")
 OPENAI_API_KEY  = os.environ["OPENAI_API_KEY"] # must be supplied
-
+job_type
 #  Helper: server API
 def get_next_job():
     try:
         r = requests.get(f"{SERVER_URL}/private_api/get_next_job", timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            return data if "job_id" in data else None
+    except Exception as e:
+        print("get_next_job error:", e)
+    return None
+
+def get_job(job_type):
+    try:
+        payload = {"job_type": job_type}
+        r = requests.post(f"{SERVER_URL}/private_api/get_job", json = payload, timeout=20)
         if r.status_code == 200:
             data = r.json()
             return data if "job_id" in data else None
