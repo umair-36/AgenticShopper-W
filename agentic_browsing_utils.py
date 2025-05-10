@@ -60,26 +60,26 @@ async def generate_links_fallback(url, promo_criteria, agent_p, link_agent, hops
 
     while hops>0:
         hop_i += 1
-        print(f"Attempting hop {hop_i}")
+        agent_p.log_and_print(f"Attempting hop {hop_i}")
         possible_links = await agent_p.get_possible_links()
         try:
             # need to properly form URLs
             link_base_hrefs = [link["href"] for link in possible_links]
             if len(link_base_hrefs) > 10:
-                print("More than 7 links found on page, filtering down")
+                agent_p.log_and_print("More than 7 links found on page, filtering down")
                 link_base_hrefs_filtered = _filter_product_links(link_agent, link_base_hrefs)
                 if len(link_base_hrefs_filtered) <= 4:
                     link_base_hrefs_filtered = link_base_hrefs[:10]
                 elif len(link_base_hrefs_filtered) > 10:
                     link_base_hrefs_filtered = random.sample(link_base_hrefs_filtered, 10)
-                print(f"Remaining links: {link_base_hrefs_filtered}")
+                agent_p.log_and_print(f"Remaining links: {link_base_hrefs_filtered}")
             else:
-                print(f"Only {len(link_base_hrefs)} links found:\n{link_base_hrefs}")
+                agent_p.log_and_print(f"Only {len(link_base_hrefs)} links found:\n{link_base_hrefs}", level='warning')
                 link_base_hrefs_filtered = link_base_hrefs.copy()
             if len(link_base_hrefs_filtered) > 7:
                   link_base_hrefs_filtered = link_base_hrefs_filtered[:7]
             link_hrefs = [_make_valid_url_oneoff( link_agent, base_url, href) for href in link_base_hrefs_filtered]
-            print(f"Links: {link_hrefs}")
+            agent_p.log_and_print(f"Links: {link_hrefs}", level='metadata')
             for href in link_hrefs:
                 valid_href = False
                 for base_href in link_base_hrefs:
@@ -88,9 +88,9 @@ async def generate_links_fallback(url, promo_criteria, agent_p, link_agent, hops
                         break
                 if not valid_href:
                     # link_hrefs.remove(href)
-                    print(f"Found possibly invalid href as {href}")
+                    agent_p.log_and_print(f"Found possibly invalid href as {href}", level='warning')
         except Exception as e:
-            print("Faced exception as {e}")
+            agent_p.log_and_print("Faced exception as {e}", level='error')
             link_hrefs = []
 
         if (hop_i == 1) and len(link_hrefs) < 1:
@@ -103,7 +103,7 @@ async def generate_links_fallback(url, promo_criteria, agent_p, link_agent, hops
                 if line.startswith('ADD:') and hop_i != 1:
                     new_url = line[4:].strip()
                     if new_url not in link_hrefs:
-                        print(f"URL hallucination detected with url: {new_url}")
+                        agent_p.log_and_print(f"URL hallucination detected with url: {new_url}", level='warning')
                     elif new_url not in to_add:
                         hits += 1
                         to_add.append(new_url)
@@ -111,7 +111,7 @@ async def generate_links_fallback(url, promo_criteria, agent_p, link_agent, hops
                 elif line.startswith('BROWSE:'):
                     new_url = line[7:].strip()
                     if new_url not in link_hrefs:
-                        print(f"URL hallucination detected with url: {new_url}")
+                        agent_p.log_and_print(f"URL hallucination detected with url: {new_url}", level='warning')
                     elif (new_url not in browsed) and (new_url not in to_browse):
                         hits += 1
                         to_browse.append(new_url)
@@ -137,7 +137,7 @@ async def generate_links_fallback(url, promo_criteria, agent_p, link_agent, hops
                 current_url = agent_p.driver.current_url
             if not _is_url_valid(link_agent, current_url, _next_url):
                 next_url = _make_valid_url(link_agent, current_url, _next_url)
-                print(f"URL {_next_url} was incomplete, attempting fixing to {next_url}")
+                agent_p.log_and_print(f"URL {_next_url} was incomplete, attempting fixing to {next_url}")
             else:
                 next_url = _next_url
 
@@ -149,7 +149,7 @@ async def generate_links_fallback(url, promo_criteria, agent_p, link_agent, hops
                 hops = 0
         else:
             if (len(to_add) < 5) and add_on == "":
-                print("Entered contingency prompt stance")
+                print("Entered contingency prompt stance", level='warning')
                 add_on = f"\nIf no relevant product or page links are found, you must find BROWSE links that are likely to lead to the products you're looking for."
             else:
                 hops = 0
@@ -270,11 +270,11 @@ async def apply_customization(agent_p, shopping_agent, product_idx, cstm, option
     starting_url = agent_p.page.url
     cstm_applied = False
     for btn in cstm_buttons_to_attempt:
-        print(f"Attempting button {btn} for {cstm}")
+        agent_p.log_and_print(f"Attempting button {btn} for {cstm}")
         await agent_p.select_and_click_button(btn, only_one = False) ; await asyncio.sleep(4)
 
         if starting_url != agent_p.page.url:
-            print(f"Failed to use button {btn} for {cstm} and went to another page, returning back.")
+            agent_p.log_and_print(f"Failed to use button {btn} for {cstm} and went to another page, returning back.", level='warning')
             await agent_p.navigate(starting_url)
             continue
 
@@ -284,10 +284,10 @@ async def apply_customization(agent_p, shopping_agent, product_idx, cstm, option
         cstm_applied = _is_customization_applied(shopping_agent, cstm, before_img, after_img)
 
         if cstm_applied:
-            print(f"Successfully used button {btn} for {cstm}")
+            agent_p.log_and_print(f"Successfully used button {btn} for {cstm}")
             break
         else:
-            print(f"Failed to use button {btn} for {cstm}")
+            agent_p.log_and_print(f"Failed to use button {btn} for {cstm}")
     return cstm_applied
 
 
@@ -300,7 +300,7 @@ async def attempt_clearing_overlay(agent_p, shopping_agent, product_idx, fs_idx 
 
     buttons_to_click = close_buttons
     pressed_buttons = []
-    print(f"Buttons to click: {buttons_to_click}")
+    agent_p.log_and_print(f"Buttons to click: {buttons_to_click}", level='metadata')
     starting_url = agent_p.page.url
     overlay_detected = False
     for button in buttons_to_click:
@@ -309,12 +309,12 @@ async def attempt_clearing_overlay(agent_p, shopping_agent, product_idx, fs_idx 
         else:
             pressed_buttons += [button]
 
-        print(f"Attempting to press {button}")
+        agent_p.log_and_print(f"Attempting to press {button}")
         await agent_p.select_and_click_button(button, only_one = False) ; await asyncio.sleep(4)
 
         # ensure that the url stayed the same
         if starting_url != agent_p.page.url:
-            print('Accidently moved away from URL')
+            agent_p.log_and_print(f'Accidently moved away from URL {starting_url} to URL {agent_p.page.url}', level='warning')
             await agent_p.navigate(starting_url) ; await asyncio.sleep(4)
 
         updated_image_attempt_button = f"{agent_p.path_stem}product_{product_idx}_{fs_idx}_{button}.png"
@@ -335,14 +335,14 @@ async def attempt_to_add_product(agent_p, shopping_agent, product_idx, img_suffi
 
     adding_btns = _get_add_to_cart_buttons(shopping_agent, page_buttons)
     random.shuffle(adding_btns)
-    print(f"Identified buttons for adding product to cart: {adding_btns}")
+    agent_p.log_and_print(f"Identified buttons for adding product to cart: {adding_btns}", level='metadata')
     add_bttn_image = cart_attempt_image # This is just a fallback to be on the safer side
     for btn in adding_btns:
-        print(f"Attempting button {btn} for adding product to cart")
+        agent_p.log_and_print(f"Attempting button {btn} for adding product to cart")
         await agent_p.select_and_click_button(btn, only_one = True) ; await asyncio.sleep(4)
 
         if starting_url != agent_p.page.url:
-            print(f"Failed to use button {btn} for adding product to cart and went to another page, returning back.")
+            agent_p.log_and_print(f"Failed to use button {btn} for adding product to cart and went to another page, returning back.", level='warning')
             await agent_p.navigate(starting_url)
             continue
 
@@ -352,10 +352,10 @@ async def attempt_to_add_product(agent_p, shopping_agent, product_idx, img_suffi
         product_added = _is_product_added(shopping_agent, cart_attempt_image, add_bttn_image)
 
         if product_added:
-            print(f"Successfully added product!!")
+            agent_p.log_and_print(f"Successfully added product!!")
             return product_added, add_bttn_image
         else:
-            print(f"Failed to use button {btn} for adding product")
+            agent_p.log_and_print(f"Failed to use button {btn} for adding product")
     return False, add_bttn_image
 
 
@@ -375,7 +375,7 @@ async def navigate_to_cart_checkout(agent_p, shopping_agent, scenario_ = "cart",
     all_items = page_buttons_full_all + page_links
 
     nav_options = _get_cart_checkout_options(shopping_agent, all_items)
-    print(f"Identified options for moving to cart/check s-{scenario_}: {nav_options}")
+    agent_p.log_and_print(f"Identified options for moving to cart/check s-{scenario_}: {nav_options}", level='metadata')
     try_idx = 0
     for option in nav_options:
 
@@ -399,11 +399,11 @@ async def navigate_to_cart_checkout(agent_p, shopping_agent, scenario_ = "cart",
         await agent_p.take_screenshot(cart_img_path)
 
         if _cart_or_checkout_reached(shopping_agent, starting_page_img, cart_img_path, scenario_):
-            print(f"Successfully navigated to cart/checkout s-{scenario_} using option: {option}")
+            agent_p.log_and_print(f"Successfully navigated to cart/checkout s-{scenario_} using option: {option}")
             return cart_img_path
             break
         else:
-            print(f"Failed to navigate to cart/checkout s-{scenario_} using option: {option}")
+            agent_p.log_and_print(f"Failed to navigate to cart/checkout s-{scenario_} using option: {option}")
 
     # In case of failure, you can include an option to return to home
     # await agent_p.navigate(starting_url)
@@ -458,7 +458,7 @@ async def process_product(agent_p, shopping_agent, verifier_agent, product_idx, 
         'essential_customizations': essentials
     })
 
-    print(details_dict)
+    agent_p.log_and_print(details_dict)
     # ---------------------------------------------------------------------------------- #
 
 
@@ -467,7 +467,7 @@ async def process_product(agent_p, shopping_agent, verifier_agent, product_idx, 
     applicable_bool, promo_resp = _is_product_applicable(verifier_agent, promo_criteria, details_dict)
     details_dict['applicability'] = promo_resp
 
-    print(f"Product Applicability: {promo_resp}")
+    agent_p.log_and_print(f"Product Applicability: {promo_resp}")
 
     if not applicable_bool:
         pass
@@ -482,23 +482,23 @@ async def process_product(agent_p, shopping_agent, verifier_agent, product_idx, 
 
     for cstm in custmizations_dict.keys():
         if not _customization_required(shopping_agent, promo_criteria, details_dict, added_products, cstm):
-            print(f"{cstm} is not required for product {product_idx}")
+            agent_p.log_and_print(f"{cstm} is not required for product {product_idx}")
             continue
         else:
             all_options = custmizations_dict[cstm]
             options = _customization_option_selections(shopping_agent, landing_page_img_path, promo_criteria, cstm, all_options)
-            print(f"{cstm} is required for product {product_idx}, ideally set to {options}")
+            agent_p.log_and_print(f"{cstm} is required for product {product_idx}, ideally set to {options}")
 
         cstm_applied_dict[cstm] = False
         if _is_preselected(shopping_agent, cstm, landing_page_img_path):
-            print(f"{cstm} is already preselected for product {product_idx}")
+            agent_p.log_and_print(f"{cstm} is already preselected for product {product_idx}")
             # continue
         cstm_applied_dict[cstm] = await apply_customization(agent_p, shopping_agent, product_idx, cstm, options)
         if not cstm_applied_dict[cstm]:
             # Try again once if failed (sometimes a button gets repressed an)
             cstm_applied_dict[cstm] = await apply_customization(agent_p, shopping_agent, product_idx+0.1, cstm, options)
 
-    print(f"Resulting Customizations: {cstm_applied_dict}")
+    agent_p.log_and_print(f"Resulting Customizations: {cstm_applied_dict}")
 
     # ---------------------------------------------------------------------------------- #
 
@@ -523,12 +523,12 @@ async def process_product(agent_p, shopping_agent, verifier_agent, product_idx, 
             quantity_required = _needs_more_quantity(shopping_agent, promo_criteria, details_dict)
 
             while quantity_required:
-                print('Trying to add the product once again to increase quantity.')
+                agent_p.log_and_print('Trying to add the product once again to increase quantity.')
                 agent_p.navigate(starting_url)
                 quantity_required = _needs_more_quantity(shopping_agent, promo_criteria, details_dict)
         else:
             failure_cause = _cause_of_failure(shopping_agent, add_bttn_image)
-            print(f"Failure cause: {failure_cause}")
+            agent_p.log_and_print(f"Failure cause: {failure_cause}", level='warning')
             if 'None' not in failure_cause.lower()[:6]:
                 cstm = failure_cause.split(':', 1)[0]
                 options = failure_cause.split(':', 1)[1]
@@ -576,7 +576,7 @@ async def add_products_to_cart(agent_p, shopping_agent, verifier_agent, all_prod
 
         criteria_met, met_desc = _criteria_met(shopping_agent, promo_criteria, added_products)
         if criteria_met:
-            print(f"Criteria Met?: {met_desc}")
+            agent_p.log_and_print(f"Criteria Met?: {met_desc}")
             break
 
     return added_products
@@ -588,7 +588,7 @@ async def attempt_applying_promo(agent_p, shopping_agent, promo, cart_img_path):
     likely_promo_fields = _get_promo_fields(shopping_agent, all_text_fields, cart_img_path)
 
     if len(likely_promo_fields) <= 0:
-        print("No reasonable promo entering fields found!!")
+        agent_p.log_and_print("No reasonable promo entering fields found!!", level='error')
         return False, "", ""
 
         
@@ -596,7 +596,7 @@ async def attempt_applying_promo(agent_p, shopping_agent, promo, cart_img_path):
     await agent_p.take_screenshot(pre_promo_img)
 
     for pf_idx, promo_field in enumerate(likely_promo_fields):
-        print(f"Attempting promo field {pf_idx}: {promo_field}")
+        agent_p.log_and_print(f"Attempting promo field {pf_idx}: {promo_field}")
         promo_field.pop('element', None)
         await agent_p.add_text_to_field(promo_field, promo) ; await asyncio.sleep(4)
 
@@ -606,16 +606,16 @@ async def attempt_applying_promo(agent_p, shopping_agent, promo, cart_img_path):
         promo_entered = _is_promo_entered(shopping_agent, pre_promo_img, post_promo_img)
         if promo_entered:
             # attempt applying the promo
-            print("Promo Entered!!")
+            agent_p.log_and_print("Promo Entered!!")
             all_apply_buttons = await agent_p.get_buttons_full(include_elements = False)
             likely_apply_buttons = _get_apply_buttons(shopping_agent, all_apply_buttons, post_promo_img)
 
             if len(likely_apply_buttons) <= 0:
-                print("No apply buttons found!!")
+                agent_p.log_and_print("No apply buttons found!!", level='error')
                 return False, "", ""
 
             for ab_idx, apply_button in enumerate(likely_apply_buttons):
-                print(f"Attempting apply button {ab_idx} for text field {pf_idx}: {apply_button}")
+                agent_p.log_and_print(f"Attempting apply button {ab_idx} for text field {pf_idx}: {apply_button}")
                 apply_button.pop("element", None)
                 await agent_p.click_button_by_attrs(apply_button, only_one = True) ; await asyncio.sleep(12)
 
@@ -623,13 +623,13 @@ async def attempt_applying_promo(agent_p, shopping_agent, promo, cart_img_path):
                 await agent_p.take_screenshot(apply_promo_img)
 
                 if _is_promo_applied(shopping_agent, post_promo_img, apply_promo_img):
-                    print("Promo Applied!!!!")
+                    agent_p.log_and_print("Promo Applied!!!!")
                     return True, post_promo_img, apply_promo_img
                 else:
-                    print("Promo not applied")
+                    agent_p.log_and_print("Promo not applied")
             break
         else:
-            print("Promo not entered")
+            agent_p.log_and_print("Promo not entered", level='error')
     return False, "", ""
     # ---------------------------------------------------------------------------------- #
 
@@ -647,7 +647,7 @@ async def process_job(url, desc, promo, agent_s, agent_p, shopping_agent, verifi
     stem = agent_p.path_stem
     # Phase 1
     promo_criteria, p1_v_resp = generate_criterion(stem, url, desc, promo, agent_s, shopping_agent, verifier_agent, DEBUG=True)
-    print(promo_criteria)
+    agent_p.log_and_print(promo_criteria)
 
     # Phase 2
     try:
@@ -655,14 +655,14 @@ async def process_job(url, desc, promo, agent_s, agent_p, shopping_agent, verifi
         if len(rta)< 2:
             raise Exception("Could not find sufficient links")
     except:
-        print(f"Failed to generate links from agent_s, opting for agent_p")
+        agent_p.log_and_print(f"Failed to generate links from agent_s, opting for agent_p", level='warning')
         rta, sta, tb, br = await generate_links_fallback(url, promo_criteria, agent_p, shopping_agent)
         
 
     all_product_links = rta.copy()
     product_link_sources = sta.copy()
     base_url = url
-    print(product_link_sources)
+    agent_p.log_and_print(product_link_sources, level='metadata')
 
     # Phase 3
     added_products = await add_products_to_cart(agent_p, shopping_agent, verifier_agent, all_product_links, product_link_sources, promo_criteria, base_url)
